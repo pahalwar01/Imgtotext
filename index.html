@@ -3,69 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultimate OCR - Camera, PDF & Image</title>
+    <title>All-in-One OCR Scanner (Hindi/English)</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; display: flex; justify-content: center; padding: 20px; }
-        .container { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 700px; text-align: center; }
-        .btn-group { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
-        button { background: #4A90E2; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
-        .camera-box { display: none; margin-bottom: 20px; border: 2px solid #333; border-radius: 10px; overflow: hidden; background: #000; }
-        video { width: 100%; max-height: 400px; }
-        #status-box { margin: 15px 0; display: none; }
-        .progress-bar { width: 100%; background: #eee; height: 10px; border-radius: 5px; overflow: hidden; }
-        .progress-fill { width: 0%; height: 100%; background: #4CAF50; transition: 0.3s; }
-        textarea { width: 100%; margin-top: 15px; padding: 15px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 14px; }
-        .copy-btn { background: #28a745; width: 100%; margin-top: 10px; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f4f7f9; display: flex; justify-content: center; padding: 20px; margin: 0; }
+        .container { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 100%; max-width: 700px; text-align: center; }
+        h1 { color: #2c3e50; margin-bottom: 5px; }
+        .btn-group { display: flex; gap: 10px; justify-content: center; margin: 20px 0; flex-wrap: wrap; }
+        button { background: #3498db; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        button:hover { background: #2980b9; }
+        button:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .camera-box { display: none; margin-bottom: 20px; border: 3px solid #2c3e50; border-radius: 12px; overflow: hidden; background: #000; position: relative; }
+        video { width: 100%; height: auto; display: block; }
+        .capture-btn { background: #e74c3c; margin: 15px; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); }
+        #status-box { margin: 15px 0; display: none; background: #e8f4fd; padding: 10px; border-radius: 8px; }
+        .progress-bar { width: 100%; background: #ddd; height: 10px; border-radius: 5px; margin-top: 10px; overflow: hidden; }
+        .progress-fill { width: 0%; height: 100%; background: #2ecc71; transition: 0.3s; }
+        textarea { width: 100%; margin-top: 15px; padding: 15px; border: 1px solid #ccc; border-radius: 10px; box-sizing: border-box; font-size: 15px; line-height: 1.5; }
+        .copy-btn { background: #2ecc71; width: 100%; margin-top: 10px; font-size: 18px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>🚀 Live OCR Scanner</h1>
-    <p>Camera, PDF ya Image se text nikalein</p>
+    <h1>📄 Smart Scanner Tool</h1>
+    <p>Camera se photo kheecho ya PDF/Image upload karo</p>
 
     <div class="btn-group">
         <input type="file" id="file-input" accept="image/*,application/pdf" style="display:none;" onchange="processFile()">
+        
         <button onclick="document.getElementById('file-input').click()">📁 Upload File</button>
-        <button id="camera-toggle" onclick="toggleCamera()" style="background: #e67e22;">📷 Open Camera</button>
+        <button id="camera-toggle" onclick="toggleCamera()" style="background: #f39c12;">📷 Open Camera</button>
     </div>
 
     <div id="camera-area" class="camera-box">
         <video id="video" autoplay playsinline></video>
-        <button onclick="capturePhoto()" style="margin: 10px; background: #e74c3c;">📸 Capture & Scan</button>
+        <button class="capture-btn" onclick="capturePhoto()">📸 Click & Scan</button>
     </div>
 
     <div id="status-box">
-        <p id="status-text">Processing...</p>
+        <strong id="status-text">Taiyari ho rahi hai...</strong>
         <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
     </div>
 
-    <textarea id="output-text" rows="10" placeholder="Aapka text yahan aayega..."></textarea>
-    <button class="copy-btn" id="copy-btn" onclick="copyText()" style="display:none;">Copy All Text</button>
+    <textarea id="output-text" rows="12" placeholder="Scan kiya hua text yahan aayega..."></textarea>
+    <button class="copy-btn" id="copy-btn" onclick="copyText()" style="display:none;">📋 Copy All Text</button>
 </div>
 
 <canvas id="canvas" style="display:none;"></canvas>
 <canvas id="pdf-canvas" style="display:none;"></canvas>
 
 <script>
+    // PDF.js Worker Setup
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     
     let stream = null;
     const video = document.getElementById('video');
     const cameraArea = document.getElementById('camera-area');
 
-    // --- Camera Functions ---
+    // 1. Camera Functions
     async function toggleCamera() {
         if (stream) {
             stopCamera();
         } else {
             try {
+                // environment mode mobile ke peeche wale camera ke liye
                 stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
                 video.srcObject = stream;
                 cameraArea.style.display = 'block';
                 document.getElementById('camera-toggle').innerText = "❌ Close Camera";
+                document.getElementById('camera-toggle').style.background = "#c0392b";
             } catch (err) {
                 alert("Camera access nahi mila: " + err.message);
             }
@@ -78,6 +86,7 @@
             stream = null;
             cameraArea.style.display = 'none';
             document.getElementById('camera-toggle').innerText = "📷 Open Camera";
+            document.getElementById('camera-toggle').style.background = "#f39c12";
         }
     }
 
@@ -93,12 +102,11 @@
         }, 'image/jpeg');
     }
 
-    // --- OCR & File Functions ---
+    // 2. File Handling (Image & PDF)
     async function processFile() {
         const file = document.getElementById('file-input').files[0];
         if (!file) return;
 
-        document.getElementById('status-box').style.display = 'block';
         if (file.type === "application/pdf") {
             await handlePDF(file);
         } else {
@@ -107,51 +115,71 @@
     }
 
     async function handlePDF(file) {
+        document.getElementById('status-box').style.display = 'block';
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
         let fullText = "";
+
         for (let i = 1; i <= pdf.numPages; i++) {
-            document.getElementById('status-text').innerText = `PDF Page ${i} scanning...`;
+            document.getElementById('status-text').innerText = `PDF Page ${i}/${pdf.numPages} rendering...`;
             const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: 2.0 });
+            const viewport = page.getViewport({ scale: 2.0 }); // High quality for OCR
             const canvas = document.getElementById('pdf-canvas');
             canvas.height = viewport.height;
             canvas.width = viewport.width;
             await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+            
             const blob = await new Promise(res => canvas.toBlob(res));
-            fullText += await runOCR(blob, true) + "\n\n";
+            const pageText = await runOCR(blob, true); // true means it's a part of PDF
+            fullText += `--- Page ${i} ---\n${pageText}\n\n`;
+            document.getElementById('output-text').value = fullText;
         }
-        document.getElementById('output-text').value = fullText;
         document.getElementById('status-text').innerText = "PDF Scan Complete!";
     }
 
-    async function runOCR(source, isPDF = false) {
+    // 3. Main OCR Engine (Tesseract.js v5)
+    async function runOCR(source, isPDFPart = false) {
         document.getElementById('status-box').style.display = 'block';
-        const worker = await Tesseract.createWorker('eng+hin');
+        document.getElementById('copy-btn').style.display = 'none';
         
-        worker.setLogger(m => {
-            if (m.status === 'recognizing text') {
-                document.getElementById('progress-fill').style.width = (m.progress * 100) + "%";
-                document.getElementById('status-text').innerText = `Scanning: ${Math.round(m.progress * 100)}%`;
+        // V5 correct syntax: worker create karte waqt hi logger dena hai
+        const worker = await Tesseract.createWorker('eng+hin', 1, {
+            logger: m => {
+                if (m.status === 'recognizing text') {
+                    const progress = Math.round(m.progress * 100);
+                    document.getElementById('progress-fill').style.width = progress + "%";
+                    document.getElementById('status-text').innerText = `Scanning: ${progress}%`;
+                } else {
+                    document.getElementById('status-text').innerText = m.status;
+                }
             }
         });
 
-        const { data: { text } } = await worker.recognize(source);
-        await worker.terminate();
-        
-        if (!isPDF) {
-            document.getElementById('output-text').value = text;
-            document.getElementById('copy-btn').style.display = 'block';
+        try {
+            const { data: { text } } = await worker.recognize(source);
+            await worker.terminate();
+            
+            if (!isPDFPart) {
+                document.getElementById('output-text').value = text;
+                document.getElementById('status-text').innerText = "Scan Successful!";
+                document.getElementById('copy-btn').style.display = 'block';
+            }
+            return text;
+        } catch (err) {
+            console.error(err);
+            document.getElementById('status-text').innerText = "Error ho gayi!";
+            return "";
         }
-        return text;
     }
 
+    // 4. Utility Functions
     function copyText() {
-        const text = document.getElementById('output-text');
-        text.select();
+        const textArea = document.getElementById('output-text');
+        textArea.select();
         document.execCommand('copy');
-        alert("Copy ho gaya!");
+        alert("Text copy ho gaya! Ab aap ise kahin bhi paste kar sakte hain.");
     }
 </script>
+
 </body>
 </html>
