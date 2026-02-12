@@ -3,82 +3,106 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Universal OCR - Image & PDF to Text</title>
+    <title>Ultimate OCR - Camera, PDF & Image</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; padding: 20px; }
-        .container { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 700px; text-align: center; }
-        .upload-area { border: 2px dashed #4A90E2; padding: 30px; border-radius: 10px; background: #f9fbff; margin-bottom: 20px; }
-        button { background: #4A90E2; color: white; border: none; padding: 12px 30px; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; }
-        button:disabled { background: #ccc; }
-        #status-box { margin: 20px 0; display: none; }
-        .progress-bar { width: 100%; background: #eee; height: 12px; border-radius: 6px; overflow: hidden; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; display: flex; justify-content: center; padding: 20px; }
+        .container { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 700px; text-align: center; }
+        .btn-group { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
+        button { background: #4A90E2; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .camera-box { display: none; margin-bottom: 20px; border: 2px solid #333; border-radius: 10px; overflow: hidden; background: #000; }
+        video { width: 100%; max-height: 400px; }
+        #status-box { margin: 15px 0; display: none; }
+        .progress-bar { width: 100%; background: #eee; height: 10px; border-radius: 5px; overflow: hidden; }
         .progress-fill { width: 0%; height: 100%; background: #4CAF50; transition: 0.3s; }
-        textarea { width: 100%; margin-top: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 15px; box-sizing: border-box; }
-        .action-btns { display: flex; gap: 10px; margin-top: 10px; }
-        .copy-btn { background: #28a745; flex: 1; }
+        textarea { width: 100%; margin-top: 15px; padding: 15px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 14px; }
+        .copy-btn { background: #28a745; width: 100%; margin-top: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>📄 Smart OCR Tool</h1>
-    <p>Image ya Scanned PDF upload karke text copy karein.</p>
+    <h1>🚀 Live OCR Scanner</h1>
+    <p>Camera, PDF ya Image se text nikalein</p>
 
-    <div class="upload-area">
-        <input type="file" id="file-input" accept="image/*,application/pdf">
+    <div class="btn-group">
+        <input type="file" id="file-input" accept="image/*,application/pdf" style="display:none;" onchange="processFile()">
+        <button onclick="document.getElementById('file-input').click()">📁 Upload File</button>
+        <button id="camera-toggle" onclick="toggleCamera()" style="background: #e67e22;">📷 Open Camera</button>
     </div>
 
-    <button id="start-btn" onclick="processFile()">Start Extraction</button>
+    <div id="camera-area" class="camera-box">
+        <video id="video" autoplay playsinline></video>
+        <button onclick="capturePhoto()" style="margin: 10px; background: #e74c3c;">📸 Capture & Scan</button>
+    </div>
 
     <div id="status-box">
         <p id="status-text">Processing...</p>
         <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
     </div>
 
-    <textarea id="output-text" rows="12" placeholder="Extraction ke baad text yahan dikhega..."></textarea>
-    
-    <div class="action-btns">
-        <button class="copy-btn" id="copy-btn" onclick="copyText()" style="display:none;">Copy All Text</button>
-    </div>
+    <textarea id="output-text" rows="10" placeholder="Aapka text yahan aayega..."></textarea>
+    <button class="copy-btn" id="copy-btn" onclick="copyText()" style="display:none;">Copy All Text</button>
 </div>
 
+<canvas id="canvas" style="display:none;"></canvas>
 <canvas id="pdf-canvas" style="display:none;"></canvas>
 
 <script>
-    // PDF.js worker setup
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+    
+    let stream = null;
+    const video = document.getElementById('video');
+    const cameraArea = document.getElementById('camera-area');
 
-    async function processFile() {
-        const fileInput = document.getElementById('file-input');
-        const output = document.getElementById('output-text');
-        const statusText = document.getElementById('status-text');
-        const progressFill = document.getElementById('progress-fill');
-        const statusBox = document.getElementById('status-box');
-        const startBtn = document.getElementById('start-btn');
-        const copyBtn = document.getElementById('copy-btn');
-
-        if (!fileInput.files[0]) return alert("Pehle file toh chuno bhai!");
-
-        const file = fileInput.files[0];
-        startBtn.disabled = true;
-        statusBox.style.display = 'block';
-        output.value = "";
-
-        try {
-            if (file.type === "application/pdf") {
-                statusText.innerText = "PDF read ho rahi hai...";
-                await handlePDF(file);
-            } else {
-                statusText.innerText = "Image scan ho rahi hai...";
-                await runOCR(file);
+    // --- Camera Functions ---
+    async function toggleCamera() {
+        if (stream) {
+            stopCamera();
+        } else {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                video.srcObject = stream;
+                cameraArea.style.display = 'block';
+                document.getElementById('camera-toggle').innerText = "❌ Close Camera";
+            } catch (err) {
+                alert("Camera access nahi mila: " + err.message);
             }
-            copyBtn.style.display = 'block';
-        } catch (err) {
-            statusText.innerText = "Error: " + err.message;
-        } finally {
-            startBtn.disabled = false;
+        }
+    }
+
+    function stopCamera() {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+            cameraArea.style.display = 'none';
+            document.getElementById('camera-toggle').innerText = "📷 Open Camera";
+        }
+    }
+
+    async function capturePhoto() {
+        const canvas = document.getElementById('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        
+        canvas.toBlob(async (blob) => {
+            stopCamera();
+            await runOCR(blob);
+        }, 'image/jpeg');
+    }
+
+    // --- OCR & File Functions ---
+    async function processFile() {
+        const file = document.getElementById('file-input').files[0];
+        if (!file) return;
+
+        document.getElementById('status-box').style.display = 'block';
+        if (file.type === "application/pdf") {
+            await handlePDF(file);
+        } else {
+            await runOCR(file);
         }
     }
 
@@ -86,43 +110,39 @@
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
         let fullText = "";
-
         for (let i = 1; i <= pdf.numPages; i++) {
-            document.getElementById('status-text').innerText = `Page ${i} of ${pdf.numPages} rendering...`;
+            document.getElementById('status-text').innerText = `PDF Page ${i} scanning...`;
             const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: 2.0 }); // Higher scale = better OCR accuracy
+            const viewport = page.getViewport({ scale: 2.0 });
             const canvas = document.getElementById('pdf-canvas');
-            const context = canvas.getContext('2d');
             canvas.height = viewport.height;
             canvas.width = viewport.width;
-
-            await page.render({ canvasContext: context, viewport: viewport }).promise;
-            
-            // Convert canvas to blob for Tesseract
-            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-            const pageText = await runOCR(blob, true);
-            fullText += `--- Page ${i} ---\n${pageText}\n\n`;
-            document.getElementById('output-text').value = fullText;
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+            const blob = await new Promise(res => canvas.toBlob(res));
+            fullText += await runOCR(blob, true) + "\n\n";
         }
-        document.getElementById('status-text').innerText = "Sabhi pages scan ho gaye!";
+        document.getElementById('output-text').value = fullText;
+        document.getElementById('status-text').innerText = "PDF Scan Complete!";
     }
 
-    async function runOCR(source, isPDFPage = false) {
+    async function runOCR(source, isPDF = false) {
+        document.getElementById('status-box').style.display = 'block';
         const worker = await Tesseract.createWorker('eng+hin');
         
-        if (!isPDFPage) {
-            worker.setLogger(m => {
-                if (m.status === 'recognizing text') {
-                    document.getElementById('progress-fill').style.width = (m.progress * 100) + "%";
-                    document.getElementById('status-text').innerText = `Scanning: ${Math.round(m.progress * 100)}%`;
-                }
-            });
-        }
+        worker.setLogger(m => {
+            if (m.status === 'recognizing text') {
+                document.getElementById('progress-fill').style.width = (m.progress * 100) + "%";
+                document.getElementById('status-text').innerText = `Scanning: ${Math.round(m.progress * 100)}%`;
+            }
+        });
 
         const { data: { text } } = await worker.recognize(source);
         await worker.terminate();
         
-        if (!isPDFPage) document.getElementById('output-text').value = text;
+        if (!isPDF) {
+            document.getElementById('output-text').value = text;
+            document.getElementById('copy-btn').style.display = 'block';
+        }
         return text;
     }
 
@@ -133,6 +153,5 @@
         alert("Copy ho gaya!");
     }
 </script>
-
 </body>
 </html>
